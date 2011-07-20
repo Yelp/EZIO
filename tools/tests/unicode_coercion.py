@@ -10,7 +10,7 @@ class MyStringable(object):
         return 'ohai'
 
     def __unicode__(self):
-        return 'ohaiunicode'
+        return u'ohaiunicode'
 
 display = {
         'first': 1,

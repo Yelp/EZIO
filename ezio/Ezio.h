@@ -182,7 +182,7 @@ Py_ssize_t coerce_all(PyObject *transaction, int *status) {
   resulting string.
   */
 PyObject *concatenate_strings(PyObject *transaction, Py_ssize_t total_length) {
-    PyObject *res = PyString_FromStringAndSize((char*)NULL, total_length);
+    PyObject *res = PyString_FromStringAndSize(NULL, total_length);
     if (res == NULL) {
         return NULL;
     }

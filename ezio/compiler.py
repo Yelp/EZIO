@@ -520,7 +520,7 @@ def generate_hook(function_name, class_name, public=True):
                  to the caller
     """
     buf = LineBufferMixin()
-    buf.add_line('static PyObject *%s(PyObject *self, PyObject *args) {' % function_name)
+    buf.add_line('static PyObject *%s(PyObject *self, PyObject *args) {' % (function_name,))
     buf.indent += 1
 
     buf.add_line('PyObject *display, *transaction;')
