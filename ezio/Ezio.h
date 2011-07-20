@@ -69,9 +69,9 @@ class PySmartPointer {
 };
 
 /* Status codes that can be returned by the coercion/filtering code. */
-#define COERCED_TO_STR 0
-#define COERCED_TO_UNICODE 1
-#define COERCE_FAILED 2
+static const int COERCED_TO_STR = 0;
+static const int COERCED_TO_UNICODE = 1;
+static const int COERCE_FAILED = 2;
 
 /** A callback type; a filter must take in a PyObject * and return a new reference
   Implement this interface to transform the elements of the templating transaction
@@ -101,7 +101,7 @@ PyObject *default_unicode_filter(PyObject *item, void *closure_data) {
   and modify `status` to reflect the success or failure of the coercions.
 
   This implementation (and others here) is unsafe in general because
-  they re-enter the interpreter without re-checking list bounds.
+  it re-enters the interpreter without re-checking list bounds.
   This is OK in this case because only internal C++ code has a reference
   to `transaction`, so the list bounds cannot vary.
 
