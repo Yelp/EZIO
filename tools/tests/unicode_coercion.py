@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 import testify
 from testify.assertions import assert_equal
@@ -17,6 +18,8 @@ display = {
         'second': 2.0,
         'third': u'asdf',
         'fourth': MyStringable(),
+        # this is a true unicode object that happens to also contain a non-ASCII character:
+        'fifth': u"hommage à jack",
 }
 
 class SimpleTestCase(EZIOTestCase):
@@ -34,9 +37,13 @@ class SimpleTestCase(EZIOTestCase):
 
     def test(self):
         super(SimpleTestCase, self).test()
+        # note that 'asdf' == u'asdf', so we don't need to explicitly prefix the
+        # literals here with u:
         assert_equal(
-            self.result.split(),
-            ['first', '1', 'second', '2.0', 'third', 'asdf', 'fourth', 'ohaiunicode']
+            self.result.strip().split('\n'),
+            ['first', '1', 'second', '2.0', 'third', 'asdf', 'fourth', 'ohaiunicode',
+             'fifth', u'hommage \xe0 jack'
+            ]
         )
 
 if __name__ == '__main__':
