@@ -1524,10 +1524,10 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
                 self.add_line("int %s = -1;" % (contains_status,))
             if variable_name is not None:
                 target = variable_name
+                self.add_line("%s = NULL;" % (target,))
             else:
                 target = self._make_tempvar()
-                self.add_line("PyObject *%s;" % (target,))
-            self.add_line("%s = NULL;" % (target,))
+                self._declare_and_initialize([target])
             cleanup_label = 'CLEANUP_%d' % (self.unique_id_counter.next(),)
 
             self.exception_handler_stack.append(cleanup_label)
@@ -1563,8 +1563,8 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
             for val, newref in ((value1, newref1), (value2, newref2)):
                 if newref:
                     self.add_line("Py_XDECREF(%s);" % (val,))
-            self.add_line("if (!(%s && %s && %s)) { Py_XDECREF(%s); goto %s; }" %
-                (value1, value2, target, target, self.exception_handler_stack[-1]))
+            # fail if we did not successfully populate `target`:
+            self.add_line("if (!%s) { goto %s; }" % (target, self.exception_handler_stack[-1]))
 
             if not variable_name and new_ref_to_target:
                 self.add_line("Py_DECREF(%s);" % (target,))
