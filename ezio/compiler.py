@@ -644,6 +644,20 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
         # until finally you return a null pointer back to the Python calling code
         self.exception_handler_stack = []
 
+    @contextmanager
+    def additional_namespace(self, namespace):
+        """Contextmanager to push-pop a namespace."""
+        self.namespaces.append(namespace)
+        yield
+        self.namespaces.pop()
+
+    @contextmanager
+    def additional_exception_handler(self, exception_handler):
+        """Contextmanager to push-pop an exception handler."""
+        self.exception_handler_stack.append(exception_handler)
+        yield
+        self.exception_handler_stack.pop()
+
     def make_subgenerator(self):
         return CodeGenerator(class_definition=self.class_definition,
             literal_registry=self.registry, path_registry=self.path_registry,
@@ -1666,15 +1680,13 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
             # then include appropriate namespacing and compile it
             munged_call_node = copy.deepcopy(call_node)
             call_exception_handler = "HANDLE_EXCEPTIONS_%d" % (self.unique_id_counter.next(),)
-            self.exception_handler_stack.append(call_exception_handler)
-            self.namespaces.append({raw_result_tempvar: 'NATIVE'})
-            fake_arg_node = _ast.Name(id=raw_result_tempvar, ctx=_ast.Load())
-            munged_call_node.args = [fake_arg_node] + call_node.args
-            # compile the call to the postprocessing function, and have it write the result
-            # to the transaction (which has been reset to be the original transaction)
-            self.visit(munged_call_node)
-            self.namespaces.pop()
-            self.exception_handler_stack.pop()
+            with self.additional_exception_handler(call_exception_handler):
+                with self.additional_namespace({raw_result_tempvar: 'NATIVE'}):
+                    fake_arg_node = _ast.Name(id=raw_result_tempvar, ctx=_ast.Load())
+                    munged_call_node.args = [fake_arg_node] + call_node.args
+                    # compile the call to the postprocessing function, and have it write the result
+                    # to the transaction (which has been reset to be the original transaction)
+                    self.visit(munged_call_node)
 
             # dispose of the raw result, on both exceptional and unexceptional paths
             # this is a deterministic Py_DECREF; we failed out of the NULL case above
