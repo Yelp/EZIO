@@ -1040,9 +1040,10 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
             # were we given an externally scoped C variable to put the result in?
             if variable_name:
                 result_name = variable_name
+                self.add_line('%s = NULL;' % (result_name,))
             else:
                 result_name = "tempresultvar_%d" % unique_id
-                self.add_line('PyObject *%s;' % result_name)
+                self._declare_and_initialize([result_name])
 
             argtuple, kwargdict, tempvars_and_newrefs = self._generate_argstuple_and_kwdict_for_invocation(call_node)
 
@@ -1062,9 +1063,10 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
                 self.add_line("Py_XDECREF(%s);" % (temp_callable_name,))
             self.add_line(" ".join("Py_XDECREF(%s);" % (tempvar,)
                 for tempvar, newref in tempvars_and_newrefs if newref))
-            success_condition = " && ".join((argtuple, kwargdict, temp_callable_name, result_name))
-            self.add_line("if (!(%s)) { goto %s; }" %
-                (success_condition, self.exception_handler_stack[-1]))
+            # fail if we did not successfully compute the final result
+            # (i.e., failed to evaluate the arguments, retrieve the callable, or call it)
+            self.add_line("if (!%s) { goto %s; }" %
+                (result_name, self.exception_handler_stack[-1]))
 
         if variable_name:
             return True
