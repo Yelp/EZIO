@@ -98,14 +98,11 @@ class LineBufferMixin(object):
 
         ...yeah, that made no sense. See the use cases :-|
         """
-        raise NotImplementedError
+        pass
 
     def get_lines(self):
         """Return a list of all lines in the buffer, recursively descending into fixups."""
-        try:
-            self.finalize()
-        except NotImplementedError:
-            pass
+        self.finalize()
 
         result = []
         for line in self.lines:
@@ -934,6 +931,7 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
         self.exception_handler_stack.append(exception_handler)
         # create block scope for temporary variables:
         self.add_line('{')
+        self.indent += 1
 
         # python callables have a callable object and a return value, create temp vars for these
         result_name = None
@@ -1001,6 +999,7 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
         self.add_line("}")
 
         # close block scope
+        self.indent -= 1
         self.add_line('}')
 
         # python convention is that function call always returns a new ref:
@@ -1604,6 +1603,88 @@ class CodeGenerator(LineBufferMixin, NodeVisitor):
             if not new_ref:
                 self.add_line('Py_INCREF(%s);' % (tempvar,))
             self.add_line('%s.set_referent(%s);' % (target_name, tempvar,))
+
+    def visit_With(self, with_node, variable_name=None):
+        """Compile the with statement. See caveats below."""
+        assert not variable_name, 'With statements are not expressions.'
+        # refuse to compile unless this is our encoding of #call
+        if not (with_node.optional_vars and isinstance(with_node.optional_vars, _ast.Name)
+                and with_node.optional_vars.id == '__call__'):
+            raise Exception('Currently the only supported use of `with` is to encode #call.')
+
+        self._visit_CheetahCallStatement(with_node)
+
+    def _visit_CheetahCallStatement(self, with_node):
+        """Compile Cheetah's magical #call statement.
+
+        The semantics of #call are confusing. If you do:
+        #call self.layout_container(border=False)
+            <p>$bar $baz($quux, $bal)
+        #end call
+        the effect will be to execute the enclosed code against a fresh transaction,
+        then concatenate the transaction and pass the resulting string as the first
+        argument to self.layout_container. It's an exotic but useful convenience.
+
+        Since Python itself has no 'call' statement, we encode #call in Python ASTs
+        by transforming it into a with statement. See tmpl2py for details.
+        """
+        assert self.compiler_settings.template_mode, 'Cannot compile #call outside of template mode.'
+        call_node = with_node.context_expr
+        assert isinstance(call_node, _ast.Call), '#call must reference a call.'
+
+        with self.block_scope():
+            exception_handler = 'HANDLE_EXCEPTIONS_%d' % (self.unique_id_counter.next(),)
+
+            # this will hold the old value of this->transaction:
+            transaction_tempvar = self._make_tempvar()
+            # this will hold the intermediate result of the #call block execution:
+            raw_result_tempvar = self._make_tempvar()
+            self._declare_and_initialize([raw_result_tempvar])
+            # save the old transaction
+            self.add_line('PyObject *%s = this->transaction;' % (transaction_tempvar,))
+            # create a new one
+            self.add_line('if (!(this->transaction = PyList_New(0))) { goto %s; };'
+                    % (self.exception_handler_stack[-1],))
+
+            self.exception_handler_stack.append(exception_handler)
+            # compile the body of the #call statement
+            for stmt in with_node.body:
+                self.visit(stmt)
+            self.exception_handler_stack.pop()
+            # concatenate the temporary transaction
+            self.add_line('%s = ezio_concatenate(this->transaction);' % (raw_result_tempvar,))
+
+            # on exceptional or unexceptional exit, clean up the temporary transaction:
+            self.add_line('%s:' % (exception_handler,))
+            self.add_line('Py_DECREF(this->transaction);')
+            self.add_line('this->transaction = %s;' % (transaction_tempvar,))
+            # if we did not successfully concatenate the temporary transaction, fail:
+            self.add_line('if (!%s) { goto %s; }' % (raw_result_tempvar,
+                self.exception_handler_stack[-1]))
+
+            # prepend the raw result to the enclosed call node's args,
+            # then include appropriate namespacing and compile it
+            munged_call_node = copy.deepcopy(call_node)
+            call_exception_handler = "HANDLE_EXCEPTIONS_%d" % (self.unique_id_counter.next(),)
+            self.exception_handler_stack.append(call_exception_handler)
+            self.namespaces.append({raw_result_tempvar: 'NATIVE'})
+            fake_arg_node = _ast.Name(id=raw_result_tempvar, ctx=_ast.Load())
+            munged_call_node.args = [fake_arg_node] + call_node.args
+            # compile the call to the postprocessing function, and have it write the result
+            # to the transaction (which has been reset to be the original transaction)
+            self.visit(munged_call_node)
+            self.namespaces.pop()
+            self.exception_handler_stack.pop()
+
+            # dispose of the raw result, on both exceptional and unexceptional paths
+            # this is a deterministic Py_DECREF; we failed out of the NULL case above
+            self.add_line('Py_DECREF(%s);' % (raw_result_tempvar,))
+            self.add_line("if (0) {")
+            with self.increased_indent():
+                self.add_line('%s:' % (call_exception_handler,))
+                self.add_line('Py_DECREF(%s);' % (raw_result_tempvar,))
+                self.add_line("goto %s;" % (self.exception_handler_stack[-1],))
+            self.add_line("}")
 
     def run(self, module_name, parsetree):
         """
