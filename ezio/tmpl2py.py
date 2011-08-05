@@ -146,12 +146,6 @@ DIRECTIVE_REGEX = re.compile('^\s*#')
 # (the \ and the $ are regex metacharacters and must be escaped here)
 METACHARACTER_REGEX = re.compile(r'#|\\|\$')
 
-def stringify_literal(string):
-    """Turn a chunk of literal text into a Python string literal, unescaping
-    dollar signs and making sure that it fits on one line.
-    """
-    return repr(string.replace('$$', '$'))
-
 # a group of an odd number of dollar signs
 UNESCAPED_DOLLAR = re.compile( r'''
         (?<!{dollar})           # not preceded by a dollar
@@ -213,13 +207,13 @@ class LiteralTextStrategy(object):
                         continue
                 elif metacharacter == "#":
                     # unescaped # --- break out into directive mode
-                    py_out.commit_line(stringify_literal(consumed) + '\n')
+                    py_out.commit_line(repr(consumed) + '\n')
                     break
                 elif metacharacter == "$":
                     if subsequent_char.isalpha() or subsequent_char in ('_', '(', '[', '{'):
                         # this is the start of a valid Python identifer,
                         # or a Cheetah placeholder block. break out:
-                        py_out.commit_line(stringify_literal(consumed) + '\n')
+                        py_out.commit_line(repr(consumed) + '\n')
                         break
                     else:
                         # this is just a $, e.g., $100.00
@@ -243,7 +237,7 @@ class LiteralTextStrategy(object):
                 # When a directive is the last line in the file, this will
                 # terminate us without adding a spurious newline.
                 if consumed != '':
-                    py_out.commit_line(stringify_literal(consumed) + '\n')
+                    py_out.commit_line(repr(consumed) + '\n')
                 break
 
             # else continue (implicitly)
