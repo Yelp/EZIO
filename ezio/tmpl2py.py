@@ -33,19 +33,6 @@
 
     The main entry points to this module are ``tmpl2py()`` and
     ``tmpl2PyOut()``.
-
-    Here's one way to understand the Cheetah template syntax. A Cheetah compiler
-    is a state machine; it's either in Cheetah mode (handling bare literal text)
-    or in Python/"placeholder" mode (handling Python code). The problem is that
-    the transition rule between these states isn't regular, but context-free, e.g.,
-
-    i'm literal text $but("i'm", ("not", "instead", ("I'm Python!",))) see?
-
-    we must in some sense count the closing parentheses before we can re-enter
-    Cheetah mode. This is why the compiler doesn't separate naturally into "lexer"
-    and "parser" layers; the "natural" breakdown of lexical units for Python is
-    incompatible with Cheetah and vice versa, and we can't transition between the
-    two systems within the lexer itself.
 """
 
 import ast
