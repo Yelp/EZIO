@@ -199,7 +199,7 @@ class LiteralTextStrategy(object):
                 driver.advance_past(before_metacharacter)
 
                 if metacharacter == "\\":
-                    if subsequent_char in ("\\", "#", "$"):
+                    if subsequent_char in ("#", "$"):
                         # subsequent char is an escaped metacharacter, consume and skip it
                         # i.e., \# means #, and \$ means $
                         driver.advance_past(driver.head[:2])
