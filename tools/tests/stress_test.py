@@ -44,6 +44,7 @@ class StressTest(EZIOTestCase):
         assert_in('#def notadef', self.result)
         assert_in("this isn't a $function", self.result)
         assert_in(r"one backslash looks like \ and two look like \\!", self.result)
+        assert_in("Two dollar signs make a $$", self.result)
         assert_in('#end def', self.result)
 
 if __name__ == '__main__':
